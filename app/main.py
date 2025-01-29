@@ -1,16 +1,19 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from app.webrtc import WebRTCConnection
+from fastapi.responses import StreamingResponse
+import sounddevice as sd
+import numpy as np
+import io
 
 app = FastAPI()
 
-# Подключение статических файлов (HTML)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+def audio_stream():
+    while True:
+        frames, _ = sd.rec(1024, samplerate=48000, channels=1, dtype='int16', blocking=True)
+        wav_buffer = io.BytesIO()
+        wav_buffer.write(frames.tobytes())
+        wav_buffer.seek(0)
+        yield wav_buffer.read()
 
-# Инициализация WebRTC
-webrtc = WebRTCConnection()
-app.include_router(webrtc.router)
-
-@app.get("/")
-async def root():
-    return {"message": "Microphone Streaming Service is running!"}
+@app.get("/stream")
+def stream_audio():
+    return StreamingResponse(audio_stream(), media_type="audio/wav")
