@@ -1,15 +1,19 @@
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import sounddevice as sd
 import numpy as np
 import io
 
 app = FastAPI()
 
+# Обслуживание файлов из папки static
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Обработчик для корневого маршрута, отдающий HTML-файл
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
-    with open("index.html", "r") as f:  # Предполагается, что файл находится в корне проекта
+    with open("static/index.html", "r") as f:  # Путь теперь указывает на папку static
         return HTMLResponse(content=f.read())
 
 def audio_stream():

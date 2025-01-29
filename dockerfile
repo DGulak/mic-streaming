@@ -1,7 +1,8 @@
 FROM python:3.10
 
 WORKDIR /app
-COPY . /app
+COPY static /app/static
+COPY app /app
 
 RUN apt-get update && apt-get install -y \
     libopus-dev \
