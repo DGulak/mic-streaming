@@ -4,14 +4,14 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
-
+app.mount("/static", StaticFiles(directory="static"), name="static")
 # Храним активный поток аудио (по сути - очередь)
 audio_stream = asyncio.Queue()
 
 # Эндпоинт для передачи HTML страницы
 @app.get("/")
-async def get_html():
-    return HTMLResponse(content=open("index.html").read(), status_code=200)
+async def get_index():
+    return HTMLResponse(content=open("static/index.html").read(), status_code=200)
 
 # WebSocket для принятия аудио потока от клиента
 @app.websocket("/ws/stream")
