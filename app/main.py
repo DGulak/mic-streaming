@@ -1,25 +1,39 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, StreamingResponse  # Убедитесь, что импорт правильный
-import sounddevice as sd
-import numpy as np
-import io
+import asyncio
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
-# Обработчик для корневого маршрута, отдающий HTML-файл
-@app.get("/", response_class=HTMLResponse)
-async def serve_index():
-    with open("static/index.html", "r") as f:  # Убедитесь, что путь правильный
-        return HTMLResponse(content=f.read())
+# Храним активный поток аудио (по сути - очередь)
+audio_stream = asyncio.Queue()
 
-def audio_stream():
-    while True:
-        frames, _ = sd.rec(1024, samplerate=48000, channels=1, dtype='int16', blocking=True)
-        wav_buffer = io.BytesIO()
-        wav_buffer.write(frames.tobytes())
-        wav_buffer.seek(0)
-        yield wav_buffer.read()
+# Эндпоинт для передачи HTML страницы
+@app.get("/")
+async def get_html():
+    return HTMLResponse(content=open("index.html").read(), status_code=200)
 
+# WebSocket для принятия аудио потока от клиента
+@app.websocket("/ws/stream")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            # Получаем аудио данные от клиента
+            audio_data = await websocket.receive_bytes()
+            # Добавляем данные в очередь (по сути, это и есть поток)
+            await audio_stream.put(audio_data)
+    except WebSocketDisconnect:
+        print("Client disconnected")
+        await websocket.close()
+
+# Эндпоинт для получения текущего аудио потока
 @app.get("/stream")
-def stream_audio():
-    return StreamingResponse(audio_stream(), media_type="audio/wav")
+async def get_audio_stream():
+    if not audio_stream.empty():
+        # Получаем аудио данные из очереди
+        audio_data = await audio_stream.get()
+        return StreamingResponse(iter([audio_data]), media_type="audio/wav")
+    else:
+        # Возвращаем пустой поток, если нет данных
+        return StreamingResponse(iter([]), media_type="audio/wav")

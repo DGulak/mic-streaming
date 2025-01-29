@@ -3,62 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Microphone Stream</title>
+    <title>Audio Stream</title>
 </head>
 <body>
-    <h1>WebRTC Microphone Stream</h1>
-    <button id="startButton">Start Recording</button>
+    <button id="startStream">Start Streaming</button>
+    <button id="stopStream" disabled>Stop Streaming</button>
 
     <script>
-        const startButton = document.getElementById('startButton');
-        const serverUrl = "ws://192.168.0.135:1010/ws"; // Адрес WebSocket-сервера
+        let mediaRecorder;
+        let audioChunks = [];
+        let socket;
 
-        let ws;
-        let pc;
-        let stream;
+        // Функция для подключения к WebSocket
+        function startStream() {
+            socket = new WebSocket("ws://192.168.0.135:1010/ws/stream");
 
-        startButton.addEventListener('click', async () => {
-            // Запрашиваем доступ к микрофону
-            const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream = mediaStream;
+            socket.onopen = () => {
+                console.log("WebSocket connected");
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.ondataavailable = (event) => {
+                            // Отправка аудио-данных в реальном времени
+                            if (socket.readyState === WebSocket.OPEN) {
+                                socket.send(event.data);
+                            }
+                        };
+                        mediaRecorder.start(100);  // Отправка данных каждые 100 мс
+                    })
+                    .catch(err => console.error("Error accessing microphone:", err));
 
-            // Создаем WebRTC PeerConnection
-            pc = new RTCPeerConnection();
-
-            // Добавляем аудиотрек с микрофона
-            stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-            // Подключаемся к WebSocket серверу
-            ws = new WebSocket(serverUrl);
-            ws.onopen = async () => {
-                console.log("Connected to server");
-
-                // Отправляем SDP-предложение серверу
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
-
-                // Получаем SDP-ответ от сервера
-                ws.onmessage = async (message) => {
-                    const data = JSON.parse(message.data);
-
-                    if (data.type === 'answer') {
-                        const answer = new RTCSessionDescription({ type: 'answer', sdp: data.sdp });
-                        await pc.setRemoteDescription(answer);
-                    } else if (data.type === 'icecandidate') {
-                        // Отправляем ICE кандидат
-                        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    }
-                };
+                document.getElementById("stopStream").disabled = false;
             };
 
-            // Обработка ICE кандидатов
-            pc.onicecandidate = (event) => {
-                if (event.candidate) {
-                    ws.send(JSON.stringify({ type: 'icecandidate', candidate: event.candidate }));
-                }
+            socket.onclose = () => {
+                console.log("WebSocket closed");
             };
-        });
+        }
+
+        function stopStream() {
+            mediaRecorder.stop();
+            socket.close();
+            document.getElementById("stopStream").disabled = true;
+        }
+
+        document.getElementById("startStream").addEventListener("click", startStream);
+        document.getElementById("stopStream").addEventListener("click", stopStream);
     </script>
 </body>
 </html>
