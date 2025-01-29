@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, StreamingResponse  # Добавить импорт StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse  # Убедитесь, что импорт правильный
 import sounddevice as sd
 import numpy as np
 import io
